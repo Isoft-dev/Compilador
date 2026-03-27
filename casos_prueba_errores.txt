@@ -1,0 +1,19 @@
+  // Caso 1: error sintáctico — falta ')' antes de '{' en la condición
+  if (edad >= 18 {
+    System.out.println("error falta parentesis");
+  }
+
+  // Caso 2: error sintáctico — falta ';' al final de la invocación
+  if (x > 0) {
+    System.out.println("error falta punto y coma")
+  }
+
+  // Caso 3: error sintáctico — expresión relacional incompleta (falta operador y literal)
+  if (y) {
+    System.out.println("error expresion incompleta");
+  }
+
+  // Fragmento válido tras recuperación (demuestra que el análisis continúa)
+  if (z == 0) {
+    System.out.println("fragmento correcto");
+  }
