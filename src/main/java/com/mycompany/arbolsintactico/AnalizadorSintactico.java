@@ -4,19 +4,27 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Parser recursivo con recuperación en <em>modo pánico</em> mediante
- * {@link #sincronizar()}.
+ * Parser recursivo Mini-Lang con recuperación en modo pánico.
  *
- * <p>Gramática (informal):
  * <pre>
  * programa           → lista_sentencias
- * lista_sentencias   → stmt_if lista_sentencias | ε
- * stmt_if            → "if" "(" expr_rel ")" bloque resto_condicional
- * resto_condicional  → ε | "else" "if" "(" expr_rel ")" bloque resto_condicional | "else" bloque
- * expr_rel           → IDENTIFICADOR OP_COMPARACION LITERAL_ENTERO
- * bloque             → "{" stmt_expr "}"
+ * lista_sentencias   → sentencia lista_sentencias | ε
+ * sentencia          → decl | asignacion | stmt_if | stmt_while | stmt_expr | bloque
+ * decl               → tipo IDENT ("=" expr)? ";"
+ * tipo               → "int" | "float"
+ * asignacion         → IDENT "=" expr ";"
+ * stmt_if            → "if" "(" expr ")" bloque resto_condicional
+ * stmt_while         → "while" "(" expr ")" bloque
  * stmt_expr          → invocacion_println ";"
- * invocacion_println → METODO_PRINTLN "(" LITERAL_CADENA ")"
+ * bloque             → "{" lista_sentencias "}"
+ * expr               → or_expr
+ * or_expr            → and_expr ( "||" and_expr )*
+ * and_expr           → eq_expr ( "&&" eq_expr )*
+ * eq_expr            → rel_expr ( ("=="|"!=") rel_expr )*
+ * rel_expr           → add_expr ( ("<"|">"|"<="|">=") add_expr )*
+ * add_expr           → mul_expr ( ("+"|"-") mul_expr )*
+ * mul_expr           → primary ( ("*"|"/") primary )*
+ * primary            → LITERAL_ENTERO | LITERAL_FLOAT | IDENTIFICADOR | "(" expr ")"
  * </pre>
  */
 public final class AnalizadorSintactico {
@@ -38,6 +46,14 @@ public final class AnalizadorSintactico {
         return tokens.get(indice);
     }
 
+    private Token tokenMirar(int delta) {
+        int i = indice + delta;
+        if (i < 0 || i >= tokens.size()) {
+            return tokens.get(tokens.size() - 1);
+        }
+        return tokens.get(i);
+    }
+
     private void avanzarToken() {
         if (tokenActual().getTipo() != TipoToken.EOF) {
             indice++;
@@ -49,21 +65,15 @@ public final class AnalizadorSintactico {
                 || t == TipoToken.PALABRA_CLAVE_WHILE
                 || t == TipoToken.PALABRA_CLAVE_FOR
                 || t == TipoToken.PALABRA_CLAVE_DEF
-                || t == TipoToken.PALABRA_CLAVE_CLASS;
+                || t == TipoToken.PALABRA_CLAVE_CLASS
+                || t == TipoToken.PALABRA_CLAVE_INT
+                || t == TipoToken.PALABRA_CLAVE_FLOAT;
     }
 
     private boolean esDelimitadorBloque(TipoToken t) {
         return t == TipoToken.LLAVE_DER || t == TipoToken.PALABRA_CLAVE_END;
     }
 
-    /**
-     * B. El algoritmo de sincronización: consumir hasta ancla segura.
-     * <ul>
-     *   <li>{@code ;} — se consume y se retorna.</li>
-     *   <li>{@code if}, {@code while}, {@code for}, {@code def}, {@code class} — no se consume; retorno.</li>
-     *   <li>{@code }} o {@code end} — no se consume; retorno.</li>
-     * </ul>
-     */
     public void sincronizar() {
         while (tokenActual().getTipo() != TipoToken.EOF) {
             if (tokenActual().getTipo() == TipoToken.PUNTO_Y_COMA) {
@@ -89,13 +99,24 @@ public final class AnalizadorSintactico {
         sincronizar();
     }
 
-    private static boolean esOperadorComparacion(TipoToken t) {
-        return t == TipoToken.OPERADOR_IGUAL_IGUAL
-                || t == TipoToken.OPERADOR_DISTINTO
-                || t == TipoToken.OPERADOR_MENOR
-                || t == TipoToken.OPERADOR_MAYOR
-                || t == TipoToken.OPERADOR_MENOR_IGUAL
-                || t == TipoToken.OPERADOR_MAYOR_IGUAL;
+    private NodoTerminal obligar(TipoToken esperado) {
+        Token t = tokenActual();
+        if (t.getTipo() == esperado) {
+            avanzarToken();
+            return terminalDesdeToken(t);
+        }
+        String msg = String.format(
+                "Error [Línea %d, Columna %d]: Se esperaba '%s' antes de '%s'.",
+                t.getLinea(),
+                t.getColumna(),
+                nombreTokenEsperado(esperado),
+                t.getLexema());
+        registrarErrorYSincronizar(msg);
+        return null;
+    }
+
+    private static NodoTerminal terminalDesdeToken(Token t) {
+        return new NodoTerminal(t.getTipo(), t.getLexema(), t.getLinea());
     }
 
     private static String nombreTokenEsperado(TipoToken t) {
@@ -108,63 +129,122 @@ public final class AnalizadorSintactico {
             case METODO_PRINTLN -> "System.out.println";
             case LITERAL_CADENA -> "literal de cadena";
             case LITERAL_ENTERO -> "literal entero";
+            case LITERAL_FLOAT -> "literal float";
             case IDENTIFICADOR -> "identificador";
             case PALABRA_CLAVE_IF -> "if";
             case PALABRA_CLAVE_ELSE -> "else";
+            case PALABRA_CLAVE_INT -> "int";
+            case PALABRA_CLAVE_FLOAT -> "float";
+            case PALABRA_CLAVE_WHILE -> "while";
+            case OPERADOR_ASIGNACION -> "=";
             default -> t.name();
         };
-    }
-
-    private NodoTerminal obligar(TipoToken esperado) {
-        Token t = tokenActual();
-        if (t.getTipo() == esperado) {
-            avanzarToken();
-            return new NodoTerminal(t.getTipo(), t.getLexema());
-        }
-        String msg = String.format(
-                "Error [Línea %d, Columna %d]: Se esperaba '%s' antes de '%s'.",
-                t.getLinea(),
-                t.getColumna(),
-                nombreTokenEsperado(esperado),
-                t.getLexema());
-        registrarErrorYSincronizar(msg);
-        return null;
     }
 
     public NodoPrograma parsePrograma() {
         List<NodoParseo> sentencias = new ArrayList<>();
         while (tokenActual().getTipo() != TipoToken.EOF) {
-            // Tras un error, puede quedar '}' de cierre sin pareja; se descarta para seguir.
             while (tokenActual().getTipo() == TipoToken.LLAVE_DER) {
                 avanzarToken();
             }
             if (tokenActual().getTipo() == TipoToken.EOF) {
                 break;
             }
-            if (tokenActual().getTipo() == TipoToken.PALABRA_CLAVE_IF) {
-                int antes = indice;
-                NodoSentenciaIf s = parseStmtIf();
-                if (s != null) {
-                    sentencias.add(s);
-                } else if (antes == indice) {
-                    avanzarToken();
-                }
-            } else {
+            int antes = indice;
+            NodoParseo s = parseSentencia();
+            if (s != null) {
+                sentencias.add(s);
+            } else if (antes == indice) {
                 Token t = tokenActual();
-                String msg = String.format(
-                        "Error [Línea %d, Columna %d]: Se esperaba sentencia 'if'; se encontró \"%s\".",
-                        t.getLinea(),
-                        t.getColumna(),
-                        t.getLexema());
-                marcarError(msg);
-                int antes = indice;
+                marcarError(String.format(
+                        "Error [Línea %d, Columna %d]: No se pudo analizar sentencia; se encontró \"%s\".",
+                        t.getLinea(), t.getColumna(), t.getLexema()));
                 sincronizar();
-                if (antes == indice && tokenActual().getTipo() != TipoToken.EOF) {
+                if (indice == antes && tokenActual().getTipo() != TipoToken.EOF) {
                     avanzarToken();
                 }
             }
         }
         return new NodoPrograma(sentencias);
+    }
+
+    private NodoParseo parseSentencia() {
+        TipoToken tt = tokenActual().getTipo();
+        if (tt == TipoToken.PALABRA_CLAVE_INT || tt == TipoToken.PALABRA_CLAVE_FLOAT) {
+            return parseDeclaracion();
+        }
+        if (tt == TipoToken.IDENTIFICADOR && tokenMirar(1).getTipo() == TipoToken.OPERADOR_ASIGNACION) {
+            return parseAsignacion();
+        }
+        if (tt == TipoToken.PALABRA_CLAVE_IF) {
+            return parseStmtIf();
+        }
+        if (tt == TipoToken.PALABRA_CLAVE_WHILE) {
+            return parseStmtWhile();
+        }
+        if (tt == TipoToken.METODO_PRINTLN) {
+            return parseStmtExpr();
+        }
+        if (tt == TipoToken.LLAVE_IZQ) {
+            return parseBloque();
+        }
+        return null;
+    }
+
+    private NodoDeclaracion parseDeclaracion() {
+        NodoTerminal tipo = obligarTipo();
+        if (tipo == null) {
+            return null;
+        }
+        NodoTerminal id = obligar(TipoToken.IDENTIFICADOR);
+        if (id == null) {
+            return null;
+        }
+        NodoExpresion ini = null;
+        if (tokenActual().getTipo() == TipoToken.OPERADOR_ASIGNACION) {
+            avanzarToken();
+            ini = parseExpr();
+            if (ini == null) {
+                return null;
+            }
+        }
+        NodoTerminal pyc = obligar(TipoToken.PUNTO_Y_COMA);
+        if (pyc == null) {
+            return null;
+        }
+        return new NodoDeclaracion(tipo, id, ini, pyc);
+    }
+
+    private NodoTerminal obligarTipo() {
+        Token t = tokenActual();
+        if (t.getTipo() == TipoToken.PALABRA_CLAVE_INT || t.getTipo() == TipoToken.PALABRA_CLAVE_FLOAT) {
+            avanzarToken();
+            return terminalDesdeToken(t);
+        }
+        String msg = String.format(
+                "Error [Línea %d, Columna %d]: Se esperaba 'int' o 'float'; se encontró \"%s\".",
+                t.getLinea(), t.getColumna(), t.getLexema());
+        registrarErrorYSincronizar(msg);
+        return null;
+    }
+
+    private NodoAsignacion parseAsignacion() {
+        Token idTok = tokenActual();
+        avanzarToken();
+        NodoTerminal id = terminalDesdeToken(idTok);
+        NodoTerminal eq = obligar(TipoToken.OPERADOR_ASIGNACION);
+        if (eq == null) {
+            return null;
+        }
+        NodoExpresion ex = parseExpr();
+        if (ex == null) {
+            return null;
+        }
+        NodoTerminal pyc = obligar(TipoToken.PUNTO_Y_COMA);
+        if (pyc == null) {
+            return null;
+        }
+        return new NodoAsignacion(id, eq, ex, pyc);
     }
 
     private NodoSentenciaIf parseStmtIf() {
@@ -176,7 +256,7 @@ public final class AnalizadorSintactico {
         if (pIzq == null) {
             return null;
         }
-        NodoExpresionRelacional expr = parseExprRel();
+        NodoExpresion expr = parseExpr();
         if (expr == null) {
             return null;
         }
@@ -192,62 +272,28 @@ public final class AnalizadorSintactico {
         return new NodoSentenciaIf(kwIf, pIzq, expr, pDer, bloque, resto);
     }
 
-    private NodoExpresionRelacional parseExprRel() {
-        Token id = tokenActual();
-        if (id.getTipo() != TipoToken.IDENTIFICADOR) {
-            String msg = String.format(
-                    "Error [Línea %d, Columna %d]: Se esperaba identificador en expresión relacional; se encontró \"%s\".",
-                    id.getLinea(),
-                    id.getColumna(),
-                    id.getLexema());
-            registrarErrorYSincronizar(msg);
+    private NodoSentenciaWhile parseStmtWhile() {
+        NodoTerminal kw = obligar(TipoToken.PALABRA_CLAVE_WHILE);
+        if (kw == null) {
             return null;
         }
-        avanzarToken();
-        NodoTerminal ident = new NodoTerminal(TipoToken.IDENTIFICADOR, id.getLexema());
-
-        Token op = tokenActual();
-        if (!esOperadorComparacion(op.getTipo())) {
-            String msg = String.format(
-                    "Error [Línea %d, Columna %d]: Se esperaba operador de comparación; se encontró \"%s\".",
-                    op.getLinea(),
-                    op.getColumna(),
-                    op.getLexema());
-            registrarErrorYSincronizar(msg);
+        NodoTerminal pIzq = obligar(TipoToken.PARENTESIS_IZQ);
+        if (pIzq == null) {
             return null;
         }
-        avanzarToken();
-        NodoTerminal operador = new NodoTerminal(op.getTipo(), op.getLexema());
-
-        Token num = tokenActual();
-        if (num.getTipo() != TipoToken.LITERAL_ENTERO) {
-            String msg = String.format(
-                    "Error [Línea %d, Columna %d]: Se esperaba literal entero; se encontró \"%s\".",
-                    num.getLinea(),
-                    num.getColumna(),
-                    num.getLexema());
-            registrarErrorYSincronizar(msg);
+        NodoExpresion expr = parseExpr();
+        if (expr == null) {
             return null;
         }
-        avanzarToken();
-        NodoTerminal literal = new NodoTerminal(TipoToken.LITERAL_ENTERO, num.getLexema());
-        return new NodoExpresionRelacional(ident, operador, literal);
-    }
-
-    private NodoBloque parseBloque() {
-        NodoTerminal lz = obligar(TipoToken.LLAVE_IZQ);
-        if (lz == null) {
+        NodoTerminal pDer = obligar(TipoToken.PARENTESIS_DER);
+        if (pDer == null) {
             return null;
         }
-        NodoSentenciaExpresion stmt = parseStmtExpr();
-        if (stmt == null) {
+        NodoBloque bloque = parseBloque();
+        if (bloque == null) {
             return null;
         }
-        NodoTerminal ld = obligar(TipoToken.LLAVE_DER);
-        if (ld == null) {
-            return null;
-        }
-        return new NodoBloque(lz, stmt, ld);
+        return new NodoSentenciaWhile(kw, pIzq, expr, pDer, bloque);
     }
 
     private NodoSentenciaExpresion parseStmtExpr() {
@@ -262,6 +308,33 @@ public final class AnalizadorSintactico {
         return new NodoSentenciaExpresion(inv, pyc);
     }
 
+    private NodoBloque parseBloque() {
+        NodoTerminal lz = obligar(TipoToken.LLAVE_IZQ);
+        if (lz == null) {
+            return null;
+        }
+        List<NodoParseo> lista = parseListaSentencias();
+        NodoTerminal ld = obligar(TipoToken.LLAVE_DER);
+        if (ld == null) {
+            return null;
+        }
+        return new NodoBloque(lz, lista, ld);
+    }
+
+    private List<NodoParseo> parseListaSentencias() {
+        List<NodoParseo> lista = new ArrayList<>();
+        while (tokenActual().getTipo() != TipoToken.LLAVE_DER && tokenActual().getTipo() != TipoToken.EOF) {
+            int antes = indice;
+            NodoParseo s = parseSentencia();
+            if (s != null) {
+                lista.add(s);
+            } else if (antes == indice) {
+                break;
+            }
+        }
+        return lista;
+    }
+
     private NodoInvocacionPrintln parseInvocacionPrintln() {
         NodoTerminal pr = obligar(TipoToken.METODO_PRINTLN);
         if (pr == null) {
@@ -273,16 +346,14 @@ public final class AnalizadorSintactico {
         }
         Token cad = tokenActual();
         if (cad.getTipo() != TipoToken.LITERAL_CADENA) {
-            String msg = String.format(
+            marcarError(String.format(
                     "Error [Línea %d, Columna %d]: Se esperaba cadena literal; se encontró \"%s\".",
-                    cad.getLinea(),
-                    cad.getColumna(),
-                    cad.getLexema());
-            registrarErrorYSincronizar(msg);
+                    cad.getLinea(), cad.getColumna(), cad.getLexema()));
+            registrarErrorYSincronizar("");
             return null;
         }
         avanzarToken();
-        NodoTerminal str = new NodoTerminal(TipoToken.LITERAL_CADENA, cad.getLexema());
+        NodoTerminal str = terminalDesdeToken(cad);
         NodoTerminal pDer = obligar(TipoToken.PARENTESIS_DER);
         if (pDer == null) {
             return null;
@@ -296,17 +367,17 @@ public final class AnalizadorSintactico {
         }
         Token tElse = tokenActual();
         avanzarToken();
-        NodoTerminal kwElse = new NodoTerminal(TipoToken.PALABRA_CLAVE_ELSE, tElse.getLexema());
+        NodoTerminal kwElse = terminalDesdeToken(tElse);
 
         if (tokenActual().getTipo() == TipoToken.PALABRA_CLAVE_IF) {
             Token tIf = tokenActual();
             avanzarToken();
-            NodoTerminal kwIf = new NodoTerminal(TipoToken.PALABRA_CLAVE_IF, tIf.getLexema());
+            NodoTerminal kwIf = terminalDesdeToken(tIf);
             NodoTerminal pIzq = obligar(TipoToken.PARENTESIS_IZQ);
             if (pIzq == null) {
                 return new NodoSinResto();
             }
-            NodoExpresionRelacional e = parseExprRel();
+            NodoExpresion e = parseExpr();
             if (e == null) {
                 return new NodoSinResto();
             }
@@ -327,5 +398,144 @@ public final class AnalizadorSintactico {
             return new NodoSinResto();
         }
         return new NodoElseFinal(kwElse, bloque);
+    }
+
+    // ——— Expresiones (precedencia ascendente: or < and < eq < rel < add < mul < primary) ———
+
+    private NodoExpresion parseExpr() {
+        return parseOr();
+    }
+
+    private NodoExpresion parseOr() {
+        NodoExpresion left = parseAnd();
+        if (left == null) {
+            return null;
+        }
+        while (tokenActual().getTipo() == TipoToken.OPERADOR_O_LOGICO) {
+            Token op = tokenActual();
+            avanzarToken();
+            NodoExpresion right = parseAnd();
+            if (right == null) {
+                return left;
+            }
+            left = new NodoExpresionBinaria(left, terminalDesdeToken(op), right);
+        }
+        return left;
+    }
+
+    private NodoExpresion parseAnd() {
+        NodoExpresion left = parseEq();
+        if (left == null) {
+            return null;
+        }
+        while (tokenActual().getTipo() == TipoToken.OPERADOR_Y_LOGICO) {
+            Token op = tokenActual();
+            avanzarToken();
+            NodoExpresion right = parseEq();
+            if (right == null) {
+                return left;
+            }
+            left = new NodoExpresionBinaria(left, terminalDesdeToken(op), right);
+        }
+        return left;
+    }
+
+    private NodoExpresion parseEq() {
+        NodoExpresion left = parseRel();
+        if (left == null) {
+            return null;
+        }
+        while (tokenActual().getTipo() == TipoToken.OPERADOR_IGUAL_IGUAL
+                || tokenActual().getTipo() == TipoToken.OPERADOR_DISTINTO) {
+            Token op = tokenActual();
+            avanzarToken();
+            NodoExpresion right = parseRel();
+            if (right == null) {
+                return left;
+            }
+            left = new NodoExpresionBinaria(left, terminalDesdeToken(op), right);
+        }
+        return left;
+    }
+
+    private NodoExpresion parseRel() {
+        NodoExpresion left = parseAdd();
+        if (left == null) {
+            return null;
+        }
+        while (esOperadorRelacional(tokenActual().getTipo())) {
+            Token op = tokenActual();
+            avanzarToken();
+            NodoExpresion right = parseAdd();
+            if (right == null) {
+                return left;
+            }
+            left = new NodoExpresionBinaria(left, terminalDesdeToken(op), right);
+        }
+        return left;
+    }
+
+    private static boolean esOperadorRelacional(TipoToken t) {
+        return t == TipoToken.OPERADOR_MENOR
+                || t == TipoToken.OPERADOR_MAYOR
+                || t == TipoToken.OPERADOR_MENOR_IGUAL
+                || t == TipoToken.OPERADOR_MAYOR_IGUAL;
+    }
+
+    private NodoExpresion parseAdd() {
+        NodoExpresion left = parseMul();
+        if (left == null) {
+            return null;
+        }
+        while (tokenActual().getTipo() == TipoToken.OPERADOR_MAS
+                || tokenActual().getTipo() == TipoToken.OPERADOR_MENOS) {
+            Token op = tokenActual();
+            avanzarToken();
+            NodoExpresion right = parseMul();
+            if (right == null) {
+                return left;
+            }
+            left = new NodoExpresionBinaria(left, terminalDesdeToken(op), right);
+        }
+        return left;
+    }
+
+    private NodoExpresion parseMul() {
+        NodoExpresion left = parsePrimary();
+        if (left == null) {
+            return null;
+        }
+        while (tokenActual().getTipo() == TipoToken.OPERADOR_MULTIPLICACION
+                || tokenActual().getTipo() == TipoToken.OPERADOR_DIVISION) {
+            Token op = tokenActual();
+            avanzarToken();
+            NodoExpresion right = parsePrimary();
+            if (right == null) {
+                return left;
+            }
+            left = new NodoExpresionBinaria(left, terminalDesdeToken(op), right);
+        }
+        return left;
+    }
+
+    private NodoExpresion parsePrimary() {
+        Token t = tokenActual();
+        if (t.getTipo() == TipoToken.LITERAL_ENTERO
+                || t.getTipo() == TipoToken.LITERAL_FLOAT
+                || t.getTipo() == TipoToken.IDENTIFICADOR) {
+            avanzarToken();
+            return new NodoExpresionAtomo(terminalDesdeToken(t));
+        }
+        if (t.getTipo() == TipoToken.PARENTESIS_IZQ) {
+            avanzarToken();
+            NodoExpresion inner = parseExpr();
+            obligar(TipoToken.PARENTESIS_DER);
+            return inner;
+        }
+        String msg = String.format(
+                "Error [Línea %d, Columna %d]: Se esperaba expresión primaria; se encontró \"%s\".",
+                t.getLinea(), t.getColumna(), t.getLexema());
+        registrarErrorYSincronizar(msg);
+        return null;
     }
 }

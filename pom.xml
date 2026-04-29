@@ -9,5 +9,21 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>22</maven.compiler.release>
         <exec.mainClass>com.mycompany.arbolsintactico.ArbolSintactico</exec.mainClass>
+        <!-- UTF-8 en consola Windows / Maven -->
+        <exec.jvmArgs>-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8</exec.jvmArgs>
     </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>${exec.mainClass}</mainClass>
+                    <jvmArgs>${exec.jvmArgs}</jvmArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

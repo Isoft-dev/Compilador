@@ -15,6 +15,10 @@ public final class NodoElseFinal extends NodoRestoCondicional {
         this.cuerpo = cuerpo;
     }
 
+    public NodoBloque getCuerpo() {
+        return cuerpo;
+    }
+
     @Override
     public String etiqueta() {
         return "else";

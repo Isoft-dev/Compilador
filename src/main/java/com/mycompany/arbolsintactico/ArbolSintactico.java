@@ -4,7 +4,12 @@
 
 package com.mycompany.arbolsintactico;
 
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -18,7 +23,8 @@ import java.util.Scanner;
 public class ArbolSintactico {
 
     public static void main(String[] args) {
-        Scanner s = new Scanner(System.in);
+        configurarConsolaUtf8();
+        Scanner s = new Scanner(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         Instant timestamp = Instant.now();
 
         System.out.println("VIVIANA ISAPAMELA MENDEZ CHÉ");
@@ -34,8 +40,10 @@ public class ArbolSintactico {
         System.out.println(raizCompleto.imprimirArbol());
 */
         System.out.println();
-        System.out.println("=== Análisis con modo pánico (lexer + parser) ===");
-        String fuentePrueba = cargarFuentePruebaErrores(args);
+        String rutaArchivo = resolverRutaFuente(args, s);
+        System.out.println("Archivo fuente: " + Path.of(rutaArchivo).toAbsolutePath());
+        System.out.println("=== Análisis léxico + sintáctico (modo pánico) + semántico ===");
+        String fuentePrueba = cargarFuenteDesdeArchivo(rutaArchivo);
         AnalizadorLexico lex = new AnalizadorLexico(fuentePrueba);
         List<Token> tokens = lex.tokenizar();
         for (String adv : lex.getAdvertenciasLexico()) {
@@ -58,19 +66,61 @@ public class ArbolSintactico {
         System.out.println("--- Árbol del fragmento recuperado ---");
         System.out.println(programa.imprimirArbol());
 
+        System.out.println();
+        System.out.println("=== Análisis semántico (Mini-Lang) ===");
+        AnalizadorSemantico semantico = new AnalizadorSemantico();
+        semantico.analizar(programa);
+
+        System.out.println("--- Tabla de símbolos (declaraciones) ---");
+        if (semantico.getDeclaraciones().isEmpty()) {
+            System.out.println("(sin declaraciones de variables)");
+        } else {
+            for (Symbol sym : semantico.getDeclaraciones()) {
+                System.out.println(sym);
+            }
+        }
+
+        System.out.println("--- Errores semánticos ---");
+        List<String> errSem = semantico.getErrores();
+        if (errSem.isEmpty()) {
+            System.out.println("Compilación Semántica Exitosa");
+        } else {
+            for (String e : errSem) {
+                System.out.println(e);
+            }
+        }
+
         s.close();
     }
 
     /**
-     * Carga {@code casos_prueba_errores.txt} desde el directorio de trabajo o desde la ruta en {@code args[0]}.
+     * Resuelve qué archivo analizar: argumento de línea de comandos, o texto escrito en consola.
+     * Si no hay argumentos y el usuario deja la línea vacía, usa {@code casos_prueba_errores.txt}
+     * relativo al directorio de trabajo.
      */
-    private static String cargarFuentePruebaErrores(String[] args) {
-        Path ruta = Path.of(args.length > 0 ? args[0] : "casos_prueba_errores.txt");
+    private static String resolverRutaFuente(String[] args, Scanner consola) {
+        if (args.length > 0 && !args[0].isBlank()) {
+            return args[0].trim();
+        }
+        System.out.print("Ruta del archivo fuente a analizar (Enter = casos_prueba_errores.txt): ");
+        System.out.flush();
+        String linea = consola.nextLine().trim();
+        if (linea.isEmpty()) {
+            return "casos_prueba_errores.txt";
+        }
+        return linea;
+    }
+
+    /**
+     * Lee el contenido del archivo UTF-8. Si falla, usa una fuente embebida (solo respaldo).
+     */
+    private static String cargarFuenteDesdeArchivo(String rutaStr) {
+        Path ruta = Path.of(rutaStr);
         try {
             return Files.readString(ruta);
         } catch (IOException e) {
             System.err.println("No se pudo leer " + ruta.toAbsolutePath() + ": " + e.getMessage());
-            System.err.println("Usando fuente embebida con los mismos tres errores.");
+            System.err.println("Usando fuente embebida con los mismos cuatro casos de error sintáctico.");
             return """
                     if (edad >= 18 {
                       System.out.println("error falta parentesis");
@@ -85,6 +135,19 @@ public class ArbolSintactico {
                       System.out.println("fragmento correcto");
                     }
                     """;
+        }
+    }
+
+    /**
+     * En Windows la consola suele usar otra página de códigos que UTF-8; al enviar ya en UTF-8
+     * y usar codificación de archivo/consola coherente se muestran bien tildes y la ñ.
+     */
+    private static void configurarConsolaUtf8() {
+        try {
+            System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err), true, StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
+            // mantener System.out/err por defecto
         }
     }
 }

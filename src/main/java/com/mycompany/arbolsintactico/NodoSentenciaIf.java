@@ -3,13 +3,13 @@ package com.mycompany.arbolsintactico;
 import java.util.List;
 
 /**
- * Regla: stmt_if → "if" "(" expr_rel ")" bloque resto_condicional
+ * Regla: stmt_if → "if" "(" expr ")" bloque resto_condicional
  */
 public final class NodoSentenciaIf extends NodoParseo {
 
     private final NodoTerminal kwIf;
     private final NodoTerminal parentesisIzq;
-    private final NodoExpresionRelacional condicion;
+    private final NodoExpresion condicion;
     private final NodoTerminal parentesisDer;
     private final NodoBloque cuerpo;
     private final NodoRestoCondicional resto;
@@ -17,7 +17,7 @@ public final class NodoSentenciaIf extends NodoParseo {
     public NodoSentenciaIf(
             NodoTerminal kwIf,
             NodoTerminal parentesisIzq,
-            NodoExpresionRelacional condicion,
+            NodoExpresion condicion,
             NodoTerminal parentesisDer,
             NodoBloque cuerpo,
             NodoRestoCondicional resto) {
@@ -27,6 +27,18 @@ public final class NodoSentenciaIf extends NodoParseo {
         this.parentesisDer = parentesisDer;
         this.cuerpo = cuerpo;
         this.resto = resto;
+    }
+
+    public NodoExpresion getCondicion() {
+        return condicion;
+    }
+
+    public NodoBloque getCuerpo() {
+        return cuerpo;
+    }
+
+    public NodoRestoCondicional getResto() {
+        return resto;
     }
 
     @Override

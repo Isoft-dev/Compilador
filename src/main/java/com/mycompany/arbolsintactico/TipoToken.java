@@ -9,6 +9,9 @@ public enum TipoToken {
     EOF,
     PALABRA_CLAVE_IF,
     PALABRA_CLAVE_ELSE,
+    /** Tipos Mini-Lang */
+    PALABRA_CLAVE_INT,
+    PALABRA_CLAVE_FLOAT,
     /** Anclas de sincronización (inicio de estructuras). */
     PALABRA_CLAVE_WHILE,
     PALABRA_CLAVE_FOR,
@@ -26,8 +29,16 @@ public enum TipoToken {
     OPERADOR_MAYOR,
     OPERADOR_MENOR_IGUAL,
     OPERADOR_MAYOR_IGUAL,
+    OPERADOR_ASIGNACION,
+    OPERADOR_MAS,
+    OPERADOR_MENOS,
+    OPERADOR_MULTIPLICACION,
+    OPERADOR_DIVISION,
+    OPERADOR_Y_LOGICO,
+    OPERADOR_O_LOGICO,
     IDENTIFICADOR,
     LITERAL_ENTERO,
+    LITERAL_FLOAT,
     LITERAL_CADENA,
     PUNTO_Y_COMA,
     /** Representa la secuencia reconocida como llamada a impresión en consola. */

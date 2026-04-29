@@ -3,18 +3,22 @@ package com.mycompany.arbolsintactico;
 import java.util.List;
 
 /**
- * Regla: bloque → "{" stmt_expr "}"
+ * Bloque: {@code "{" lista_sentencias "}"}
  */
 public final class NodoBloque extends NodoParseo {
 
     private final NodoTerminal llaveIzq;
-    private final NodoSentenciaExpresion sentencia;
+    private final List<NodoParseo> sentencias;
     private final NodoTerminal llaveDer;
 
-    public NodoBloque(NodoTerminal llaveIzq, NodoSentenciaExpresion sentencia, NodoTerminal llaveDer) {
+    public NodoBloque(NodoTerminal llaveIzq, List<NodoParseo> sentencias, NodoTerminal llaveDer) {
         this.llaveIzq = llaveIzq;
-        this.sentencia = sentencia;
+        this.sentencias = List.copyOf(sentencias);
         this.llaveDer = llaveDer;
+    }
+
+    public List<NodoParseo> getSentencias() {
+        return sentencias;
     }
 
     @Override
@@ -24,6 +28,10 @@ public final class NodoBloque extends NodoParseo {
 
     @Override
     public List<NodoParseo> hijos() {
-        return List.of(llaveIzq, sentencia, llaveDer);
+        List<NodoParseo> h = new java.util.ArrayList<>();
+        h.add(llaveIzq);
+        h.addAll(sentencias);
+        h.add(llaveDer);
+        return h;
     }
 }

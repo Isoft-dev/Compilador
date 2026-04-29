@@ -1,18 +1,9 @@
 package com.mycompany.arbolsintactico;
 
+import java.util.List;
+
 /**
  * Construye parse trees para fragmentos con {@code if}, {@code else if} y {@code else}.
- *
- * Gramática informal:
- * <pre>
- * stmt_if            → "if" "(" expr_rel ")" bloque resto_condicional
- * resto_condicional  → ε | "else" "if" "(" expr_rel ")" bloque resto_condicional | "else" bloque
- * expr_rel           → IDENTIFICADOR OP_COMPARACION LITERAL_ENTERO
- * bloque             → "{" stmt_expr "}"
- * stmt_expr          → invocacion_println ";"
- * invocacion_println → METODO_PRINTLN "(" LITERAL_CADENA ")"
- * </pre>
- * OP_COMPARACION: ==, !=, &lt;, &gt;, &lt;=, &gt;=
  */
 public final class FabricaArbolIfEjemplo {
 
@@ -20,14 +11,14 @@ public final class FabricaArbolIfEjemplo {
     }
 
     private static NodoTerminal t(TipoToken tipo, String lexema) {
-        return new NodoTerminal(tipo, lexema);
+        return new NodoTerminal(tipo, lexema, 1);
     }
 
-    private static NodoExpresionRelacional exprRel(TipoToken opTipo, String opLex, String id, String entero) {
-        return new NodoExpresionRelacional(
-                t(TipoToken.IDENTIFICADOR, id),
+    private static NodoExpresion exprRel(TipoToken opTipo, String opLex, String id, String entero) {
+        return new NodoExpresionBinaria(
+                new NodoExpresionAtomo(t(TipoToken.IDENTIFICADOR, id)),
                 t(opTipo, opLex),
-                t(TipoToken.LITERAL_ENTERO, entero));
+                new NodoExpresionAtomo(t(TipoToken.LITERAL_ENTERO, entero)));
     }
 
     private static NodoBloque bloquePrintln(String mensaje) {
@@ -39,7 +30,7 @@ public final class FabricaArbolIfEjemplo {
         NodoSentenciaExpresion stmt = new NodoSentenciaExpresion(inv, t(TipoToken.PUNTO_Y_COMA, ";"));
         return new NodoBloque(
                 t(TipoToken.LLAVE_IZQ, "{"),
-                stmt,
+                List.of(stmt),
                 t(TipoToken.LLAVE_DER, "}"));
     }
 
@@ -47,7 +38,7 @@ public final class FabricaArbolIfEjemplo {
      * Solo {@code if (edad >= 18) { ... }} sin ramas {@code else}.
      */
     public static NodoSentenciaIf crearArbolIfMayorEdad() {
-        NodoExpresionRelacional cond = exprRel(TipoToken.OPERADOR_MAYOR_IGUAL, ">=", "edad", "18");
+        NodoExpresion cond = exprRel(TipoToken.OPERADOR_MAYOR_IGUAL, ">=", "edad", "18");
         NodoBloque bloque = bloquePrintln("Eres mayor de edad.");
         return new NodoSentenciaIf(
                 t(TipoToken.PALABRA_CLAVE_IF, "if"),
@@ -59,28 +50,19 @@ public final class FabricaArbolIfEjemplo {
     }
 
     /**
-     * Cadena completa equivalente a:
-     * <pre>
-     * if (edad &gt; 18) {
-     *     System.out.println("Eres mayor de edad.");
-     * } else if (edad == 18) {
-     *     System.out.println("Eres menor de edad.");
-     * } else {
-     *     System.out.println("Eres menor de edad.");
-     * }
-     * </pre>
+     * Cadena completa equivalente a if / else if / else sobre edad.
      */
     public static NodoSentenciaIf crearArbolIfElseIfElseEdad() {
         NodoTerminal kwIf = t(TipoToken.PALABRA_CLAVE_IF, "if");
         NodoTerminal parIzq1 = t(TipoToken.PARENTESIS_IZQ, "(");
-        NodoExpresionRelacional cond1 = exprRel(TipoToken.OPERADOR_MAYOR, ">", "edad", "18");
+        NodoExpresion cond1 = exprRel(TipoToken.OPERADOR_MAYOR, ">", "edad", "18");
         NodoTerminal parDer1 = t(TipoToken.PARENTESIS_DER, ")");
         NodoBloque bloque1 = bloquePrintln("Eres mayor de edad.");
 
         NodoTerminal kwElse2 = t(TipoToken.PALABRA_CLAVE_ELSE, "else");
         NodoTerminal kwIf2 = t(TipoToken.PALABRA_CLAVE_IF, "if");
         NodoTerminal parIzq2 = t(TipoToken.PARENTESIS_IZQ, "(");
-        NodoExpresionRelacional cond2 = exprRel(TipoToken.OPERADOR_IGUAL_IGUAL, "==", "edad", "18");
+        NodoExpresion cond2 = exprRel(TipoToken.OPERADOR_IGUAL_IGUAL, "==", "edad", "18");
         NodoTerminal parDer2 = t(TipoToken.PARENTESIS_DER, ")");
         NodoBloque bloque2 = bloquePrintln("Tienes 18 años.");
 

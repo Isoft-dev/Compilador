@@ -3,33 +3,27 @@ package com.mycompany.arbolsintactico;
 import java.util.List;
 
 /**
- * Regla: resto_condicional → "else" "if" "(" expr ")" bloque resto_condicional
+ * {@code while "(" expr ")" bloque}
  */
-public final class NodoElseIf extends NodoRestoCondicional {
+public final class NodoSentenciaWhile extends NodoParseo {
 
-    private final NodoTerminal kwElse;
-    private final NodoTerminal kwIf;
+    private final NodoTerminal kwWhile;
     private final NodoTerminal parentesisIzq;
     private final NodoExpresion condicion;
     private final NodoTerminal parentesisDer;
     private final NodoBloque cuerpo;
-    private final NodoRestoCondicional resto;
 
-    public NodoElseIf(
-            NodoTerminal kwElse,
-            NodoTerminal kwIf,
+    public NodoSentenciaWhile(
+            NodoTerminal kwWhile,
             NodoTerminal parentesisIzq,
             NodoExpresion condicion,
             NodoTerminal parentesisDer,
-            NodoBloque cuerpo,
-            NodoRestoCondicional resto) {
-        this.kwElse = kwElse;
-        this.kwIf = kwIf;
+            NodoBloque cuerpo) {
+        this.kwWhile = kwWhile;
         this.parentesisIzq = parentesisIzq;
         this.condicion = condicion;
         this.parentesisDer = parentesisDer;
         this.cuerpo = cuerpo;
-        this.resto = resto;
     }
 
     public NodoExpresion getCondicion() {
@@ -40,17 +34,13 @@ public final class NodoElseIf extends NodoRestoCondicional {
         return cuerpo;
     }
 
-    public NodoRestoCondicional getResto() {
-        return resto;
-    }
-
     @Override
     public String etiqueta() {
-        return "else_if";
+        return "stmt_while";
     }
 
     @Override
     public List<NodoParseo> hijos() {
-        return List.of(kwElse, kwIf, parentesisIzq, condicion, parentesisDer, cuerpo, resto);
+        return List.of(kwWhile, parentesisIzq, condicion, parentesisDer, cuerpo);
     }
 }

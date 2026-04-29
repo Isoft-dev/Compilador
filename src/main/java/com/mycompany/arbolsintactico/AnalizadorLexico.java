@@ -16,6 +16,8 @@ public final class AnalizadorLexico {
     static {
         PALABRAS_CLAVE.put("if", TipoToken.PALABRA_CLAVE_IF);
         PALABRAS_CLAVE.put("else", TipoToken.PALABRA_CLAVE_ELSE);
+        PALABRAS_CLAVE.put("int", TipoToken.PALABRA_CLAVE_INT);
+        PALABRAS_CLAVE.put("float", TipoToken.PALABRA_CLAVE_FLOAT);
         PALABRAS_CLAVE.put("while", TipoToken.PALABRA_CLAVE_WHILE);
         PALABRAS_CLAVE.put("for", TipoToken.PALABRA_CLAVE_FOR);
         PALABRAS_CLAVE.put("def", TipoToken.PALABRA_CLAVE_DEF);
@@ -108,6 +110,14 @@ public final class AnalizadorLexico {
         while (pos < fuente.length() && Character.isDigit(fuente.charAt(pos))) {
             avanzarCaracter();
         }
+        if (pos < fuente.length() && fuente.charAt(pos) == '.') {
+            avanzarCaracter();
+            while (pos < fuente.length() && Character.isDigit(fuente.charAt(pos))) {
+                avanzarCaracter();
+            }
+            String lex = fuente.substring(inicio, pos);
+            return tokenDesdeLinea(lineaInicio, colInicio, TipoToken.LITERAL_FLOAT, lex);
+        }
         String lex = fuente.substring(inicio, pos);
         return tokenDesdeLinea(lineaInicio, colInicio, TipoToken.LITERAL_ENTERO, lex);
     }
@@ -167,9 +177,44 @@ public final class AnalizadorLexico {
                     avanzarCaracter();
                     yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_IGUAL_IGUAL, "==");
                 }
-                advertenciasLexico.add("Caracter '=' inesperado en línea " + lineaInicio);
                 avanzarCaracter();
-                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.IDENTIFICADOR, "=");
+                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_ASIGNACION, "=");
+            }
+            case '+' -> {
+                avanzarCaracter();
+                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_MAS, "+");
+            }
+            case '-' -> {
+                avanzarCaracter();
+                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_MENOS, "-");
+            }
+            case '*' -> {
+                avanzarCaracter();
+                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_MULTIPLICACION, "*");
+            }
+            case '/' -> {
+                avanzarCaracter();
+                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_DIVISION, "/");
+            }
+            case '&' -> {
+                if (sig == '&') {
+                    avanzarCaracter();
+                    avanzarCaracter();
+                    yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_Y_LOGICO, "&&");
+                }
+                advertenciasLexico.add("Caracter '&' incompleto (¿&&?) en línea " + lineaInicio);
+                avanzarCaracter();
+                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.IDENTIFICADOR, "&");
+            }
+            case '|' -> {
+                if (sig == '|') {
+                    avanzarCaracter();
+                    avanzarCaracter();
+                    yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.OPERADOR_O_LOGICO, "||");
+                }
+                advertenciasLexico.add("Caracter '|' incompleto (¿||?) en línea " + lineaInicio);
+                avanzarCaracter();
+                yield tokenDesdeLinea(lineaInicio, colInicio, TipoToken.IDENTIFICADOR, "|");
             }
             case '!' -> {
                 if (sig == '=') {
